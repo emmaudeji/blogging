@@ -17,6 +17,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio",
+    "seed:admin": "ts-node scripts/seed-admin.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "homepage": "https://github.com/emmaudeji/blogging#readme",

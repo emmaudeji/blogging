@@ -18,3 +18,8 @@ npx prisma migrate dev
 
 Used in production.
 npx prisma migrate deploy
+
+
+
+test user
+{"message":"Registration successful","user":{"id":"cmiailrgo0000wkhoe3cakv2c","name":"Jane Doe","email":"jane@example.com","role":"READER"}}

@@ -5,8 +5,8 @@ import { authGuard } from "../../middleware/authGuard";
 
 export const commentRouter = Router();
 
-// Authenticated users can create comments
-commentRouter.post("/", authGuard, commentController.create);
+// Public: anyone can create comments (guest or authenticated)
+commentRouter.post("/", commentController.create);
 
 // Fetch comments for a post
 commentRouter.get("/:postId", commentController.list);

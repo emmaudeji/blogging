@@ -10,9 +10,23 @@ export class CommentController {
     const parsed = createCommentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json(parsed.error);
 
+    const { postId, parentId, content, guestName, guestEmail } = parsed.data;
+    const user = req.user;
+
+    // For guests, require guestName and guestEmail
+    if (!user && (!guestName || !guestEmail)) {
+      return res.status(400).json({
+        message: "guestName and guestEmail are required for anonymous comments",
+      });
+    }
+
     const result = await commentService.create({
-      ...parsed.data,
-      authorId: req.user.id, // from auth middleware
+      postId,
+      parentId,
+      content,
+      authorId: user?.id,
+      guestName: user ? undefined : guestName,
+      guestEmail: user ? undefined : guestEmail,
     });
 
     res.status(201).json(result);

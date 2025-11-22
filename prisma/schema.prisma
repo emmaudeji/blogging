@@ -13,6 +13,12 @@ enum Role {
   READER
 }
 
+enum CommentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id        String   @id @default(cuid())
   name      String
@@ -24,5 +30,49 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations to posts/comments/media/notifications will be added later
+  comments  Comment[]
+}
+
+model Comment {
+  id         String         @id @default(cuid())
+  postId     String
+  parentId   String?
+  content    String
+  authorId   String?
+  guestName  String?
+  guestEmail String?
+  status     CommentStatus  @default(PENDING)
+  createdAt  DateTime       @default(now())
+  deletedAt  DateTime?
+
+  author     User?          @relation(fields: [authorId], references: [id])
+  parent     Comment?       @relation("CommentToReplies", fields: [parentId], references: [id])
+  replies    Comment[]      @relation("CommentToReplies")
+}
+
+model EditorInvite {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  token     String   @unique
+  role      Role     @default(EDITOR)
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  usedAt    DateTime?
+  usedById  String?
+}
+
+enum EditorRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model EditorRequest {
+  id          String               @id @default(cuid())
+  userId      String
+  status      EditorRequestStatus  @default(PENDING)
+  createdAt   DateTime             @default(now())
+  decidedAt   DateTime?
+  decidedById String?
+  note        String?
 }

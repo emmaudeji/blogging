@@ -1,11 +1,11 @@
 // src/config/sessionStore.ts
-import session from "express-session";
+import session, { SessionOptions } from "express-session";
 import pgSession from "connect-pg-simple";
 import { env } from "./env";
 
 const PgSession = pgSession(session);
 
-export const sessionOptions = {
+export const sessionOptions: SessionOptions = {
   store: new PgSession({
     conString: env.DATABASE_URL,
     createTableIfMissing: true,

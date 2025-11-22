@@ -2,7 +2,7 @@
 import bcrypt from "bcrypt";
 import { prisma } from "../../config/database";
 import { RegisterInput, LoginInput } from "./auth.validation";
-import { Role } from "@prisma/client";
+import { ConflictError, UnauthorizedError } from "../../utils/errors";
 
 export class AuthService {
   async register(data: RegisterInput) {
@@ -11,7 +11,7 @@ export class AuthService {
     });
 
     if (existing) {
-      throw new Error("Email already in use");
+      throw new ConflictError("Email already in use");
     }
 
     const hashed = await bcrypt.hash(data.password, 12);
@@ -21,7 +21,7 @@ export class AuthService {
         name: data.name,
         email: data.email,
         password: hashed,
-        role: Role.READER,
+        role: "READER", // match Prisma Role enum value
       },
     });
 
@@ -33,10 +33,10 @@ export class AuthService {
       where: { email: data.email },
     });
 
-    if (!user) throw new Error("Invalid email or password");
+    if (!user) throw new UnauthorizedError("Invalid email or password");
 
     const match = await bcrypt.compare(data.password, user.password);
-    if (!match) throw new Error("Invalid email or password");
+    if (!match) throw new UnauthorizedError("Invalid email or password");
 
     return user;
   }

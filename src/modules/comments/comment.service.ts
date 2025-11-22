@@ -7,14 +7,18 @@ class CommentService {
     postId: string;
     parentId?: string;
     content: string;
-    authorId: string;
+    authorId?: string;
+    guestName?: string;
+    guestEmail?: string;
   }) {
     return prisma.comment.create({
       data: {
         postId: data.postId,
         parentId: data.parentId ?? null,
         content: data.content,
-        authorId: data.authorId,
+        authorId: data.authorId ?? null,
+        guestName: data.guestName ?? null,
+        guestEmail: data.guestEmail ?? null,
         status: CommentStatus.PENDING,
       },
     });

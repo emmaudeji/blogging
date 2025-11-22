@@ -1,13 +1,14 @@
 // src/middleware/roleGuard.ts
 import { Request, Response, NextFunction } from "express";
-import { Role } from "@prisma/client";
+
+export type UserRole = "ADMIN" | "EDITOR" | "READER";
 
 /**
  * roleGuard returns middleware that ensures the authenticated user
  * has one of the allowed roles.
  */
 export const roleGuard =
-  (allowed: Role[]) =>
+  (allowed: UserRole[]) =>
   (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = req.user;

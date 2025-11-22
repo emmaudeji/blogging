@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from "express";
 import { authService } from "./auth.service";
 import { registerSchema, loginSchema } from "./auth.validation";
+import { logger } from "../../config/logger";
 
 function regenerateSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -15,6 +16,7 @@ function regenerateSession(req: Request): Promise<void> {
 export class AuthController {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
+      logger.debug("[auth.register] raw body", req.body);
       const data = registerSchema.parse(req.body);
       const user = await authService.register(data);
 
@@ -38,6 +40,7 @@ export class AuthController {
 
   async login(req: Request, res: Response, next: NextFunction) {
     try {
+      logger.debug("[auth.login] raw body", req.body);
       const data = loginSchema.parse(req.body);
       const user = await authService.login(data);
 

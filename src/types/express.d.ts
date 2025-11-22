@@ -6,9 +6,12 @@ declare global {
     interface Request {
       user?: User;
     }
+  }
+}
 
-    interface Session {
-      userId?: string;
-    }
+// Extend express-session's SessionData so req.session.userId is typed
+declare module "express-session" {
+  interface SessionData {
+    userId?: string;
   }
 }
