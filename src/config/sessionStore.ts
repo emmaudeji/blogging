@@ -9,6 +9,8 @@ export const sessionOptions: SessionOptions = {
   store: new PgSession({
     conString: env.DATABASE_URL,
     createTableIfMissing: true,
+    schemaName: "session", // keep session table out of Prisma-managed public schema
+    tableName: "session",
   }),
 
   secret: env.SESSION_SECRET,

@@ -58,8 +58,9 @@ This section summarizes which routes are public vs protected.
   - `GET /api/media` – list media items.
 
 - **Authentication**
-  - `POST /api/auth/register` – create a new account.
+  - `POST /api/auth/register` – create a new READER account (self-service signup).
   - `POST /api/auth/login` – login and establish a session.
+  - `POST /api/auth/accept-editor-invite` – accept an editor/admin invite using a one-time token.
 
 > Note: `POST /api/comments` is public but implemented with strong validation + moderation to remain production-safe.
 
@@ -76,6 +77,9 @@ This section summarizes which routes are public vs protected.
 
 - **Notifications**
   - `GET /api/notifications` – list notifications for the current user.
+
+- **Editor role requests (from READER)**
+  - `POST /api/editor-requests` – READER requests promotion to EDITOR (admin-reviewed).
 
 ### 2.3 EDITOR/ADMIN-only
 
@@ -103,11 +107,17 @@ This section summarizes which routes are public vs protected.
   - `GET /api/users/cursor` – list users (cursor pagination).
   - `GET /api/users/:id` – get user by id.
   - `PATCH /api/users/:id` – admin update user (including role changes).
-  - `DELETE /api/users/:id` – admin delete user.
+  - `DELETE /api/users/:id` – admin delete user (guarded so the last admin cannot be removed).
 
 - **Admin dashboards**
   - `GET /api/admin/stats` – aggregate stats (posts/comments/users/media).
   - `GET /api/admin/activity` – recent activity (posts, comments, media).
+
+- **Editor invitations and requests**
+  - `POST /api/admin/editor-invites` – create an invite for an EDITOR or ADMIN (one-time token).
+  - `GET /api/admin/editor-invites` – list invites (filterable by `status=pending|used|expired`).
+  - `GET /api/admin/editor-requests` – list READER → EDITOR requests (filterable by status).
+  - `PATCH /api/admin/editor-requests/:id` – approve or reject an editor request (approval promotes the user to EDITOR).
 
 All protected routes use `authGuard` to ensure a session exists, and `roleGuard([...])` where role-based authorization is required.
 
@@ -176,13 +186,122 @@ Comments are stored with a flexible schema to support both guests and logged-in 
 
 ---
 
-## 4. Security Principles (Current Scope)
+## 4. Admin and Editor Lifecycle
 
-- **Session-based authentication** using `express-session` + Postgres-backed session store.
+### 4.1 Bootstrap and admin creation
+
+- Self-registration (`POST /api/auth/register`) always creates a `READER`.
+- Admins and editors are **never** created directly via public registration.
+- The **first** admin is bootstrapped via a seed script:
+  - `npm run seed:admin`
+  - Requires env variables:
+    - `ADMIN_EMAIL`
+    - `ADMIN_PASSWORD`
+    - `ADMIN_NAME` (optional)
+  - Behaviour:
+    - If an `ADMIN` already exists, it does nothing.
+    - If a user with `ADMIN_EMAIL` exists, it promotes that user to `ADMIN` and resets the password.
+    - Otherwise, it creates a new `ADMIN` user with the given credentials.
+
+### 4.2 Admin-only role management
+
+- Admins manage roles through the `/api/users` admin endpoints:
+  - Promote READER → EDITOR: `PATCH /api/users/:id { "role": "EDITOR" }`.
+  - Promote READER → ADMIN (additional admins): `PATCH /api/users/:id { "role": "ADMIN" }`.
+  - Demote EDITOR back to READER: `PATCH /api/users/:id { "role": "READER" }`.
+- Safety rules:
+  - The **last** admin cannot be demoted or deleted:
+    - `PATCH /api/users/:id` will reject role changes that would demote the final `ADMIN`.
+    - `DELETE /api/users/:id` will reject deletion of the final `ADMIN`.
+
+### 4.3 Editor invitation flow (admin-initiated)
+
+1. **Admin creates invite**
+   - `POST /api/admin/editor-invites`
+   - Body:
+     - `email` (required): invitee’s email.
+     - `role` (optional): `"EDITOR"` (default) or `"ADMIN"`.
+     - `expiresInDays` (optional): number of days before invite expires.
+   - Backend:
+     - Invalidates previous pending invites for that email.
+     - Generates a unique `token` and optional `expiresAt`.
+     - Stores an `EditorInvite` row: `{ email, token, role, expiresAt, usedAt: null, usedById: null }`.
+
+2. **Frontend sends invite link**
+   - The admin UI fetches invites via `GET /api/admin/editor-invites?status=pending`.
+   - Frontend constructs a link for the invitee, e.g.:
+     - `https://frontend.app/accept-invite?token=<token>`
+   - The frontend accept-invite page will later call the API with that token.
+
+3. **Invitee accepts invite**
+   - Public endpoint: `POST /api/auth/accept-editor-invite`
+   - Body:
+     - `token`: the invite token from email/link.
+     - `name`: display name to set for the user.
+     - `password`: account password (8–72 chars).
+   - Backend:
+     - Validates token: checks existence, not used, not expired.
+     - Ensures no user already exists with that email.
+     - Creates a new `User` with:
+       - `email` from invite,
+       - `name` from request,
+       - `password` (hashed),
+       - `role` from invite (EDITOR or ADMIN).
+     - Marks the invite as used (`usedAt`, `usedById`).
+     - Sets `req.session.userId` to log the new user in.
+   - Frontend:
+     - On success, stores the session cookie and redirects to the authenticated area (e.g. editor dashboard).
+
+4. **Admin tracking**
+   - `GET /api/admin/editor-invites` returns all invites.
+   - Admin UI can show counts by status (`pending`, `used`, `expired`) for notification/stats.
+
+### 4.4 Editor request flow (reader-initiated)
+
+1. **Reader requests editor role**
+   - Authenticated endpoint: `POST /api/editor-requests`.
+   - Body:
+     - `note` (optional): free-text justification.
+   - Backend:
+     - Requires a logged-in READER.
+     - If a `PENDING` request already exists for that user, returns it.
+     - Otherwise, creates a new `EditorRequest` with `status = PENDING`.
+
+2. **Admin reviews requests**
+   - `GET /api/admin/editor-requests?status=PENDING` – list pending requests.
+   - The frontend admin UI can present:
+     - User info (fetched separately),
+     - Request note,
+     - Created date.
+
+3. **Admin approves or rejects**
+   - `PATCH /api/admin/editor-requests/:id`
+   - Body:
+     - `status`: `"APPROVED"` or `"REJECTED"`.
+     - `note` (optional): explanation.
+   - Backend:
+     - Only ADMIN can call this.
+     - Ensures request is still `PENDING`.
+     - Updates the request with `status`, `note`, `decidedAt`, `decidedById`.
+     - If `APPROVED`, promotes the associated user to `role = EDITOR` within a transaction.
+
+4. **Frontend usage**
+   - Reader UI:
+     - Shows a "Request editor access" button which posts to `/api/editor-requests`.
+     - Shows the current status of any existing request by calling an endpoint that returns user meta (or a dedicated request status route added later).
+   - Admin UI:
+     - Lists requests via `/api/admin/editor-requests`.
+     - Provides Approve/Reject actions that PATCH each request.
+
+---
+
+## 5. Security Principles (Current Scope)
+
+- **Session-based authentication** using `express-session` + Postgres-backed session store (using a dedicated `session` schema to avoid Prisma drift).
 - **Session fixation protection**: session is regenerated on login and registration.
-- **Role-based authorization** via `roleGuard` and Prisma `Role` enum.
+- **Role-based authorization** via `roleGuard` and role strings (`"ADMIN" | "EDITOR" | "READER"`).
 - **Rate-limited auth endpoints** (`/api/auth`), to mitigate brute-force attacks.
 - **Validation** using Zod for request bodies, with centralized error handling.
-- **Sanitization and security middleware**: helmet, CORS, xss-clean, express-mongo-sanitize, etc.
+- **Security middleware**: Helmet (security headers), CORS (configured for the frontend), rate-limiting for sensitive routes.
 
 This document will be updated as we refine models (Posts, Taxonomy, Media, Notifications) and add more detailed policies and flows.

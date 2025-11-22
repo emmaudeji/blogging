@@ -65,16 +65,3 @@ class AdminService {
 
 export const adminService = new AdminService();
 
-// TODO: REVIEW. Production Best Practices
-
-// Admin-only access → use requireRole(["admin"])
-
-// Parallelize counts → Promise.all for performance
-
-// Pagination for recent activity → cursor-based or offset-based
-
-// Avoid sensitive data → only include necessary fields for dashboard
-
-// Caching → optional: Redis for stats that rarely change (total counts)
-
-// Logs + Monitoring → track slow queries or high-load endpoints

@@ -8,6 +8,8 @@ import taxonomyRoutes from "../modules/taxonomy/taxonomy.routes";
 import mediaRoutes from "../modules/media/media.routes";
 // import notificationRoutes from "../modules/notifications/notification.routes";
 import adminRoutes from "../modules/admin/admin.routes";
+import { editorController } from "../modules/admin/editor.controller";
+import { authGuard } from "../middleware/authGuard";
 
 const router = Router();
 
@@ -19,5 +21,10 @@ router.use("/taxonomy", taxonomyRoutes);
 router.use("/media", mediaRoutes);
 // router.use("/notifications", notificationRoutes);
 router.use("/admin", adminRoutes);
+
+// Reader: create editor role request
+router.post("/editor-requests", authGuard, (req, res, next) =>
+  editorController.createEditorRequest(req, res, next)
+);
 
 export default router;
