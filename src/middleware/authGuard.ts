@@ -1,6 +1,6 @@
 // src/middleware/authGuard.ts
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "../config/database.js";
+import { prisma } from "../config/database";
 
 export async function authGuard(
   req: Request,

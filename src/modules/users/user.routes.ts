@@ -19,7 +19,7 @@ router.post("/me/change-password", (req, res, next) =>
 // Admin-only routes
 router.get(
   "/",
-  roleGuard(["admin"]),
+  roleGuard(["ADMIN"] as any),
   (req, res, next) => userController.list(req, res, next)
 );
 
@@ -30,7 +30,7 @@ router.get(
 // | `/users/cursor?cursor=<id>&limit=20&q=john` | Cursor pagination | best for infinite scrolling, huge datasets |
 router.get(
   "/cursor",
-  roleGuard(["admin"]),
+  roleGuard(["ADMIN"] as any),
   (req, res, next) => userController.listCursor(req, res, next)
 );
 // GET /users/cursor?limit=20&q=john
@@ -46,19 +46,19 @@ router.get(
 
 router.get(
   "/:id",
-  roleGuard(["admin"]),
+  roleGuard(["ADMIN"] as any),
   (req, res, next) => userController.get(req, res, next)
 );
 
 router.patch(
   "/:id",
-  roleGuard(["admin"]),
+  roleGuard(["ADMIN"] as any),
   (req, res, next) => userController.adminUpdate(req, res, next)
 );
 
 router.delete(
   "/:id",
-  roleGuard(["admin"]),
+  roleGuard(["ADMIN"] as any),
   (req, res, next) => userController.remove(req, res, next)
 );
 

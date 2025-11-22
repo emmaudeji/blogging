@@ -9,11 +9,11 @@ import xss from "xss-clean";
 import session from "express-session";
 import morgan from "morgan";
 
-import { sessionOptions } from "./config/sessionStore.js";
-import { env } from "./config/env.js";
+import { sessionOptions } from "./config/sessionStore";
+import { env } from "./config/env";
 
 // Routes
-import router from "./routes/index.js";
+import router from "./routes";
 
 export const app = express();
 
@@ -46,7 +46,7 @@ const authLimiter = rateLimit({
   max: 20,
   message: "Too many login attempts, try again later",
 });
-app.use("/auth", authLimiter);
+app.use("/api/auth", authLimiter);
 
 // TODO: set route rate - limits if necessary. 
 // app.use(

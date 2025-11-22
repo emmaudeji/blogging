@@ -1,7 +1,7 @@
 // src/config/sessionStore.ts
 import session from "express-session";
 import pgSession from "connect-pg-simple";
-import { env } from "./env.ts";
+import { env } from "./env";
 
 const PgSession = pgSession(session);
 

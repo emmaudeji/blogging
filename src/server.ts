@@ -1,8 +1,8 @@
 // src/server.ts
-import { app } from "./app.ts";
-import { env } from "./config/env.ts";
-import { connectDB, disconnectDB } from "./config/database.ts";
-import { logger } from "./config/logger.ts";
+import { app } from "./app";
+import { env } from "./config/env";
+import { connectDB, disconnectDB } from "./config/database";
+import { logger } from "./config/logger";
 
 const startServer = async () => {
   await connectDB();

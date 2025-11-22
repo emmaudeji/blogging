@@ -6,7 +6,7 @@ import { roleGuard } from "../../middleware/roleGuard";
 const router = Router();
 
 // All routes require admin
-router.use(authGuard, roleGuard(["admin"]));
+router.use(authGuard, roleGuard(["ADMIN"] as any));
 
 router.get("/stats", adminController.stats);
 router.get("/activity", adminController.recentActivity);

@@ -23,9 +23,9 @@ class AdminService {
   /** Users metrics */
   async getUsersStats() {
     const total = await prisma.user.count();
-    const admins = await prisma.user.count({ where: { role: "admin" } });
-    const editors = await prisma.user.count({ where: { role: "editor" } });
-    const readers = await prisma.user.count({ where: { role: "reader" } });
+    const admins = await prisma.user.count({ where: { role: "ADMIN" } });
+    const editors = await prisma.user.count({ where: { role: "EDITOR" } });
+    const readers = await prisma.user.count({ where: { role: "READER" } });
 
     return { total, admins, editors, readers };
   }

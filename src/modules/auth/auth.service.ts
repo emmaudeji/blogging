@@ -2,6 +2,7 @@
 import bcrypt from "bcrypt";
 import { prisma } from "../../config/database";
 import { RegisterInput, LoginInput } from "./auth.validation";
+import { Role } from "@prisma/client";
 
 export class AuthService {
   async register(data: RegisterInput) {
@@ -20,7 +21,7 @@ export class AuthService {
         name: data.name,
         email: data.email,
         password: hashed,
-        role: "reader", // default
+        role: Role.READER,
       },
     });
 

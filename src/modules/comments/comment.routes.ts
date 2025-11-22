@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { commentController } from "./comment.controller";
 import { roleGuard } from "../../middleware/roleGuard";
- 
+import { authGuard } from "../../middleware/authGuard";
 
 export const commentRouter = Router();
 
-// Public 
-commentRouter.post("/", commentController.create);
+// Authenticated users can create comments
+commentRouter.post("/", authGuard, commentController.create);
 
 // Fetch comments for a post
 commentRouter.get("/:postId", commentController.list);
@@ -14,13 +14,15 @@ commentRouter.get("/:postId", commentController.list);
 // Moderation (admin + editor)
 commentRouter.patch(
   "/:id/moderate",
-  roleGuard(["admin", "editor"]),
+  authGuard,
+  roleGuard(["ADMIN", "EDITOR"] as any),
   commentController.moderate
 );
 
-// Soft delete (author or admin/editor)
+// Soft delete (admin/editor for now)
 commentRouter.delete(
     "/:id", 
-    roleGuard(["admin", "editor"]),
+    authGuard,
+    roleGuard(["ADMIN", "EDITOR"] as any),
     commentController.delete
 );

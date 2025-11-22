@@ -1,4 +1,5 @@
 // src/config/env.ts
+import "dotenv/config";
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -19,6 +20,7 @@ const envSchema = z.object({
   SMTP_PORT: z.string(),
   SMTP_USER: z.string(),
   SMTP_PASS: z.string(),
+  SMTP_FROM: z.string(),
 
 });
 

@@ -1,3 +1,3 @@
-// index.js
-import './app.ts';
-import './server.ts';
+// src/index.ts
+import "./app";
+import "./server";

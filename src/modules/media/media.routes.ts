@@ -13,6 +13,6 @@ router.post("/", authGuard, upload.single("file"), mediaController.upload);
 router.get("/", mediaController.list);
 
 // Delete media (admin/editor)
-router.delete("/:id", roleGuard(["admin", "editor"]), mediaController.delete);
+router.delete("/:id", roleGuard(["ADMIN", "EDITOR"] as any), mediaController.delete);
 
 export default router;

@@ -3,13 +3,23 @@ import { Request, Response, NextFunction } from "express";
 import { authService } from "./auth.service";
 import { registerSchema, loginSchema } from "./auth.validation";
 
+function regenerateSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => {
+      if (err) return reject(err);
+      resolve();
+    });
+  });
+}
+
 export class AuthController {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
       const data = registerSchema.parse(req.body);
       const user = await authService.register(data);
 
-      // store user ID in session
+      // Prevent session fixation: issue a fresh session ID on login/registration
+      await regenerateSession(req);
       req.session.userId = user.id;
 
       res.status(201).json({
@@ -31,6 +41,7 @@ export class AuthController {
       const data = loginSchema.parse(req.body);
       const user = await authService.login(data);
 
+      await regenerateSession(req);
       req.session.userId = user.id;
 
       res.json({

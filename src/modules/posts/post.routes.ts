@@ -21,15 +21,15 @@ router.get("/", (req, res, next) =>
  */
 router.use(authGuard);
 
-router.post("/", roleGuard(["admin", "editor"]), (req, res, next) =>
+router.post("/", roleGuard(["ADMIN", "EDITOR"] as any), (req, res, next) =>
   postController.create(req, res, next)
 );
 
-router.patch("/:id", roleGuard(["admin", "editor"]), (req, res, next) =>
+router.patch("/:id", roleGuard(["ADMIN", "EDITOR"] as any), (req, res, next) =>
   postController.update(req, res, next)
 );
 
-router.delete("/:id", roleGuard(["admin", "editor"]), (req, res, next) =>
+router.delete("/:id", roleGuard(["ADMIN", "EDITOR"] as any), (req, res, next) =>
   postController.remove(req, res, next)
 );
 

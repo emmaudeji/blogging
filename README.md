@@ -204,4 +204,21 @@ All routes are mounted under `/api` in `src/routes/index.ts`.
 - `GET    /api/admin/stats` – Dashboard stats (posts, comments, users, media) – admin only
 - `GET    /api/admin/activity` – Recent activity across posts/comments/media – admin only
 
-> Endpoints above are based on the current route/controller code and may be expanded
+> Endpoints above are based on the current route/controller code and may be expanded as you build out the project.
+
+## Security & Best Practices
+
+- Helmet, CORS, rate limiting, XSS & Mongo-style query sanitization are configured in `app.ts` and `security.middleware.ts`.
+- Session cookies are `httpOnly` and `secure` in production, with `sameSite="lax"`.
+- All sensitive env vars are validated on startup via Zod.
+- Most write operations are protected by `authGuard` and `roleGuard`.
+- Soft-delete patterns are used for posts and comments to preserve history.
+
+## Development Notes / Next Steps
+
+- Add proper error handling middleware for consistent API error responses.
+- Flesh out the Prisma schema with all models (Post, Comment, Category, Tag, Media, Notification, etc.) and run migrations.
+- Add automated tests (unit/integration) and replace the placeholder `npm test` script.
+- Integrate a production-grade mail provider and logging/monitoring solution if deploying to production.
+
+This README is generated from the current codebase and is intended as a starting point; adjust details as you evolve the project.
