@@ -8,7 +8,15 @@ export const commentRouter = Router();
 // Public: anyone can create comments (guest or authenticated)
 commentRouter.post("/", commentController.create);
 
-// Fetch comments for a post
+// Admin/editor: list comments for a post (any status, optional ?status=)
+commentRouter.get(
+  "/admin/:postId",
+  authGuard,
+  roleGuard(["ADMIN", "EDITOR"] as any),
+  commentController.listForModeration
+);
+
+// Public: fetch approved comments for a post
 commentRouter.get("/:postId", commentController.list);
 
 // Moderation (admin + editor)

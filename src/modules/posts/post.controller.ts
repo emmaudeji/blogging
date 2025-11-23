@@ -49,13 +49,14 @@ export class PostController {
 
   async list(req: Request, res: Response, next: NextFunction) {
     try {
-      const { cursor, limit, q, published } = req.query;
+      const { cursor, limit, q } = req.query;
 
       const result = await postService.listCursor({
         cursor: typeof cursor === "string" ? cursor : undefined,
         limit: limit ? Number(limit) : undefined,
         query: typeof q === "string" ? q : undefined,
-        publishedOnly: published === "true",
+        // Public listing should only return published posts
+        publishedOnly: true,
       });
 
       res.json(result);

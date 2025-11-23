@@ -19,18 +19,58 @@ enum CommentStatus {
   REJECTED
 }
 
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum MediaType {
+  IMAGE
+  PDF
+  OTHER
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model User {
-  id        String   @id @default(cuid())
+  id        String         @id @default(cuid())
   name      String
-  email     String   @unique
+  email     String         @unique
   password  String
-  role      Role     @default(READER)
+  role      Role           @default(READER)
   bio       String?
   avatarUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
-  comments  Comment[]
+  comments      Comment[]
+  posts         Post[]
+  notifications Notification[]
+}
+
+model Post {
+  id          String     @id @default(cuid())
+  title       String
+  slug        String     @unique
+  content     String
+  excerpt     String?
+  status      PostStatus @default(DRAFT)
+  publishedAt DateTime?
+  deletedAt   DateTime?
+  authorId    String
+  categoryId  String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  author      User       @relation(fields: [authorId], references: [id])
+  category    Category?  @relation(fields: [categoryId], references: [id])
+  tags        Tag[]      @relation("PostTags")
+  media       Media[]
+  comments    Comment[]
 }
 
 model Comment {
@@ -45,9 +85,58 @@ model Comment {
   createdAt  DateTime       @default(now())
   deletedAt  DateTime?
 
+  post       Post           @relation(fields: [postId], references: [id])
   author     User?          @relation(fields: [authorId], references: [id])
   parent     Comment?       @relation("CommentToReplies", fields: [parentId], references: [id])
   replies    Comment[]      @relation("CommentToReplies")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posts       Post[]
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  posts     Post[]   @relation("PostTags")
+}
+
+model Media {
+  id        String    @id @default(cuid())
+  url       String
+  filename  String
+  mimetype  String
+  size      Int
+  type      MediaType
+  postId    String?
+  createdAt DateTime  @default(now())
+
+  post      Post?     @relation(fields: [postId], references: [id])
+}
+
+model Notification {
+  id        String             @id @default(cuid())
+  userId    String
+  type      String
+  subject   String
+  message   String
+  data      Json?
+  status    NotificationStatus @default(PENDING)
+  createdAt DateTime           @default(now())
+  sentAt    DateTime?
+
+  user      User               @relation(fields: [userId], references: [id])
 }
 
 model EditorInvite {

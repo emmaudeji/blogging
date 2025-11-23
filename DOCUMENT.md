@@ -304,4 +304,306 @@ Comments are stored with a flexible schema to support both guests and logged-in 
 - **Validation** using Zod for request bodies, with centralized error handling.
 - **Security middleware**: Helmet (security headers), CORS (configured for the frontend), rate-limiting for sensitive routes.
 
-This document will be updated as we refine models (Posts, Taxonomy, Media, Notifications) and add more detailed policies and flows.
+---
+
+## 6. Posts & Media
+
+### 6.1 Data Model
+
+**Post** (simplified):
+
+- `id` – primary key.
+- `title` / `content` / `excerpt?` – core content fields.
+- `slug` – unique, URL-safe identifier generated from the title.
+- `status` – `DRAFT | PUBLISHED`.
+- `publishedAt?` – set when a post is published.
+- `deletedAt?` – soft-delete marker; soft-deleted posts never appear in public APIs.
+- `authorId` – FK to `User` (the author).
+- `categoryId?` – optional FK to `Category`.
+- Relations:
+  - `author: User` – post author.
+  - `category?: Category` – optional category.
+  - `tags: Tag[]` – many-to-many via `PostTags` relation.
+  - `media: Media[]` – images/PDFs/other files attached to the post.
+  - `comments: Comment[]` – comments linked to the post.
+
+**Media**:
+
+- `id` – primary key.
+- `url` – Cloudinary URL (served via CDN).
+- `filename` / `mimetype` / `size` – metadata for UI and audits.
+- `type` – `IMAGE | PDF | OTHER` (Prisma enum `MediaType`).
+- `postId?` – optional FK to `Post` (media can be global or attached to a specific post).
+
+We use [Cloudinary](https://cloudinary.com/) via `multer-storage-cloudinary` so uploads go directly to Cloudinary and we only store URLs + metadata in Postgres.
+
+### 6.2 Post API Behaviour
+
+**Public listing** – `GET /api/posts`
+
+- Query parameters:
+  - `cursor` (string, optional) – id of the last post from the previous page.
+  - `limit` (number, optional) – page size (default 20, max 100).
+  - `q` (string, optional) – free-text search across `title` and `content`.
+- Behaviour:
+  - Returns **only** posts where `status = "PUBLISHED"` and `deletedAt IS NULL`.
+  - Ordered by `createdAt DESC`.
+  - Includes:
+    - `author` (id, name).
+    - `category`.
+    - `media` – at most one image (used as a cover/thumbnail).
+- Response shape (conceptual):
+
+```json
+{
+  "data": [
+    {
+      "id": "post_1",
+      "title": "Hello World",
+      "slug": "hello-world",
+      "excerpt": "Short summary...",
+      "status": "PUBLISHED",
+      "publishedAt": "2025-11-22T12:34:56.000Z",
+      "author": { "id": "u1", "name": "Editor One" },
+      "category": { "id": "c1", "name": "Announcements" },
+      "media": [
+        { "id": "m1", "url": "https://res.cloudinary.com/...jpg", "type": "IMAGE" }
+      ]
+    }
+  ],
+  "nextCursor": "post_1"
+}
+```
+
+The frontend uses `nextCursor` to implement "Load more" or infinite scroll.
+
+**Public detail** – `GET /api/posts/slug/:slug`
+
+- Public.
+- Returns a **single** post if:
+  - `slug` matches.
+  - `status = "PUBLISHED"`.
+  - `deletedAt IS NULL`.
+- Includes:
+  - `author` (id, name).
+  - `category`.
+  - `tags` (full tag objects).
+  - `media` – **all** image media sorted by `createdAt ASC` (for galleries/hero images).
+- Returns `404 { "message": "Not found" }` if not found or not published.
+
+**Create post** – `POST /api/posts`
+
+- Requires `EDITOR` or `ADMIN` (behind `authGuard` + `roleGuard`).
+- Body (validated):
+  - `title: string` (min length 3).
+  - `content: string` (min length 10).
+  - `excerpt?: string` (max length 300).
+  - `status: "DRAFT" | "PUBLISHED"` (default `"DRAFT"`).
+- Behaviour:
+  - Generates a unique `slug` from the title.
+  - Uses `req.user.id` as `authorId`.
+  - Sets `publishedAt` = `now()` if status is `PUBLISHED`, else `null`.
+
+**Update post** – `PATCH /api/posts/:id`
+
+- Requires `EDITOR` or `ADMIN`.
+- Ownership rule:
+  - `ADMIN` can update any post.
+  - `EDITOR` can **only** update posts where `post.authorId === req.user.id`.
+- Fields are the same as create but all optional (partial update).
+- If the `title` changes, a new unique `slug` is generated.
+- If `status` changes to `PUBLISHED`, `publishedAt` is set to `now()` (if it wasn’t already).
+
+**Soft delete post** – `DELETE /api/posts/:id`
+
+- Requires `EDITOR` or `ADMIN`.
+- Ownership rule same as update.
+- Sets `deletedAt = now()`; data remains in the DB for auditing, but never appears in public endpoints.
+
+### 6.3 Media API Behaviour
+
+**Upload media** – `POST /api/media`
+
+- Requires authentication (any logged-in user).
+- Request type: `multipart/form-data`.
+- Fields:
+  - `file` – the file itself (handled by Multer + Cloudinary storage).
+  - `postId` (optional, string) – if provided, links media to an existing, non-deleted post.
+- Behaviour:
+  - File is uploaded to Cloudinary under the `blog_media` folder.
+  - `type` is derived from `mimetype`:
+    - `image/*` → `IMAGE`.
+    - `application/pdf` → `PDF`.
+    - Anything else → `OTHER`.
+  - If `postId` is provided, the backend verifies that the post exists and is not soft-deleted.
+  - Returns the created `Media` record with Cloudinary URL.
+
+**List media** – `GET /api/media`
+
+- Public.
+- Query params:
+  - `limit` (optional, default 20).
+  - `cursor` (optional, last media id).
+- Returns:
+
+```json
+{
+  "media": [ { "id": "m1", "url": "https://...", "type": "IMAGE", ... } ],
+  "nextCursor": "m1"
+}
+```
+
+**Delete media** – `DELETE /api/media/:id`
+
+- Requires `ADMIN` or `EDITOR` and authentication.
+- Currently removes the record from the DB; Cloudinary deletion can be added later as an enhancement.
+
+### 6.4 Applying Posts & Media in the UI
+
+**Public Home Page (feed):**
+
+- On initial load:
+  - Call `GET /api/posts?limit=20`.
+  - Render each post as a card using:
+    - `title`, `excerpt`, `slug`.
+    - `author.name`, `publishedAt`.
+    - First image in `media[0]?.url` as a cover image.
+- For "Load more" or infinite scroll:
+  - When the user scrolls near the bottom and `nextCursor` is non-null, call:
+    - `GET /api/posts?cursor=<nextCursor>&limit=20` and append to the list.
+- For search:
+  - Debounce the search box to call `GET /api/posts?q=<term>&limit=20`.
+
+**Post Detail Page:**
+
+- Route pattern: `/posts/:slug`.
+- On load:
+  - Call `GET /api/posts/slug/:slug`.
+  - If `404`, show a friendly "Post not found" page.
+  - Else, render:
+    - Title, author info, published date.
+    - Hero image from `media[0]?.url` and gallery from `media`.
+    - Category and tags (chips/badges) using `category` and `tags` arrays.
+- Comments:
+  - Call `GET /api/comments/:postId?limit=20` using `post.id` from the response.
+  - Show an input form at the bottom for new comments.
+  - Submitting a comment:
+    - If the user is logged in (frontend knows from `/api/auth/me`): send `{ postId, content }` (and optionally `parentId` for replies) to `POST /api/comments`.
+    - If the user is a guest: send `{ postId, content, guestName, guestEmail }`.
+  - After submit, show a message like "Your comment is awaiting moderation"; the comment will not appear in the list until approved by an editor/admin.
+
+**Editor Workflow (Post authoring):**
+
+- Preconditions:
+  - User is logged in and `role` from `/api/auth/me` is `"EDITOR"` or `"ADMIN"`.
+
+- Create new post:
+  1. Editor opens `/editor/posts/new`.
+  2. Frontend shows a form bound to `title`, `content`, `excerpt`, `status`.
+  3. On save, frontend calls `POST /api/posts` with the form data.
+  4. On success, redirect to `/editor/posts/:id` or `/posts/:slug`.
+
+- Edit existing post:
+  1. Editor navigates to `/editor/posts/:id/edit`.
+  2. Frontend fetches the current post (either via a dedicated internal route or by storing it from previous list/detail).
+  3. On save, frontend calls `PATCH /api/posts/:id`.
+  4. If the editor is not the author (and is not admin), the backend returns `403 Forbidden`.
+
+- Attach cover image/gallery:
+  1. After the post exists and the editor is on `/editor/posts/:id/edit`, show an "Upload image" button.
+  2. When the user picks a file:
+     - Send `multipart/form-data` to `POST /api/media` with:
+       - `file` = the selected file.
+       - `postId` = the current post id.
+  3. On success, the UI reloads the post’s media (either re-fetch the post detail or call a dedicated media listing for that post).
+  4. On the public post detail page, show `media` images as hero/gallery.
+
+**Admin Dashboard:**
+
+- Overall stats:
+  - Call `GET /api/admin/stats` and render counts for:
+    - Posts (total/draft/published),
+    - Comments (pending/approved/rejected),
+    - Users (admin/editor/reader),
+    - Media (total/images/pdfs/other).
+
+- Recent activity timeline:
+  - Call `GET /api/admin/activity`.
+  - Render a timeline mixing:
+    - Recent posts (with author + category + tags),
+    - Recent comments (with author/guest and linked post),
+    - Recent media uploads.
+
+- User management:
+  - `GET /api/users/cursor` to power paginated user tables.
+  - `PATCH /api/users/:id` to change roles (with last-admin safety enforced by backend).
+  - `DELETE /api/users/:id` to remove users (again guarded against deleting the last admin).
+
+- Editor invites:
+  - Use `POST /api/admin/editor-invites` from an "Invite Editor/Admin" form.
+  - Show existing invites via `GET /api/admin/editor-invites?status=pending|used|expired`.
+  - Construct frontend invite URLs like `https://frontend.app/accept-invite?token=<token>` that later call `POST /api/auth/accept-editor-invite`.
+
+- Editor requests (from readers):
+  - Approve/reject via `GET /api/admin/editor-requests` + `PATCH /api/admin/editor-requests/:id`.
+
+---
+
+## 7. Frontend Integration – End-to-End Flows
+
+This section ties all pieces together for a typical frontend SPA or Next.js app.
+
+### 7.1 Authentication & Session
+
+1. **On app bootstrap**:
+   - Call `GET /api/auth/me`.
+   - If `200`, store the user (id, name, role) in your global state (e.g., Redux/Zustand/React context).
+   - If `401`, treat the user as anonymous.
+
+2. **Register** (READER):
+   - Form posts to `POST /api/auth/register` with `{ name, email, password }`.
+   - On success, the backend creates a `READER` and initializes a session; the frontend then refreshes `me` or redirects.
+
+3. **Login**:
+   - Form posts to `POST /api/auth/login` with `{ email, password }`.
+   - The backend sets the session cookie; frontend refreshes `me` and updates UI.
+
+4. **Logout**:
+   - Call `POST /api/auth/logout`, clear any client-side user state, and redirect to a public page.
+
+### 7.2 Anonymous + Reader Experience
+
+- Anonymous:
+  - Can browse posts (`/api/posts`, `/api/posts/slug/:slug`).
+  - Can submit comments as a guest to `POST /api/comments` with `guestName` and `guestEmail`.
+
+- Reader (logged-in):
+  - Same as anonymous, plus:
+    - Profile page:
+      - `GET /api/users/me` / `PATCH /api/users/me`.
+      - `POST /api/users/me/change-password`.
+    - Notifications page:
+      - `GET /api/notifications?limit=...&cursor=...`.
+    - Editor request:
+      - Button to call `POST /api/editor-requests` to request EDITOR role.
+
+### 7.3 Editor Experience
+
+- Additional navigation items when `role === "EDITOR" || role === "ADMIN"`:
+  - "New Post" – calls `POST /api/posts` on save.
+  - "Manage Posts" – uses a listing (can re-use admin stats + filters, or add a dedicated editor-only listing later).
+  - "Moderate Comments" – pages that call:
+    - `GET /api/comments/:postId` to view existing comments.
+    - `PATCH /api/comments/:id/moderate` to approve/reject.
+  - "Media Library" – list and delete media via `/api/media` and `DELETE /api/media/:id`.
+
+### 7.4 Admin Experience
+
+- Includes everything above plus:
+  - User management UI bound to `/api/users` endpoints.
+  - Admin analytics and recent activity from `/api/admin/stats` and `/api/admin/activity`.
+  - Dedicated screens for:
+    - Editor invites (create + list).
+    - Editor requests (review + approve/reject).
+
+With these sections, the API surface is fully mapped to UI responsibilities: anonymous users see content and can comment; readers get accounts, notifications, and can request editor status; editors manage content, taxonomy, media, and moderation; admins oversee users, roles, and system health.

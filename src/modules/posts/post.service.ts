@@ -6,7 +6,8 @@ import {
   CursorPageResponse,
   normalizeLimit,
 } from "../../utils/pagination";
-import { Post, Prisma } from "@prisma/client";
+import { Post, Prisma, MediaType } from "@prisma/client";
+import { NotFoundError, ForbiddenError } from "../../utils/errors";
 
 export class PostService {
   /** Create unique slug */
@@ -41,26 +42,28 @@ export class PostService {
     const post = await prisma.post.findFirst({
       where: { id, deletedAt: null },
     });
-    if (!post) throw new Error("Post not found");
+    if (!post) throw new NotFoundError("Post not found");
 
     // Editors can only update their own posts
-    if (role === "editor" && post.authorId !== requestingUserId) {
-      throw new Error("Forbidden");
+    if (role === "EDITOR" && post.authorId !== requestingUserId) {
+      throw new ForbiddenError("You can only modify your own posts");
     }
 
     const data = updatePostSchema.parse(payload);
 
-    // regenerate slug if title changed
+    // Build update payload and regenerate slug if title changed
+    const updateData: any = { ...data };
+
     if (data.title) {
-      data.slug = await this.generateUniqueSlug(data.title);
+      updateData.slug = await this.generateUniqueSlug(data.title);
     }
 
     return prisma.post.update({
       where: { id },
       data: {
-        ...data,
+        ...updateData,
         publishedAt:
-          data.status === "PUBLISHED" ? new Date() : post.publishedAt,
+          updateData.status === "PUBLISHED" ? new Date() : post.publishedAt,
       },
     });
   }
@@ -69,10 +72,10 @@ export class PostService {
     const post = await prisma.post.findFirst({
       where: { id, deletedAt: null },
     });
-    if (!post) throw new Error("Post not found");
+    if (!post) throw new NotFoundError("Post not found");
 
-    if (role === "editor" && post.authorId !== requestingUserId) {
-      throw new Error("Forbidden");
+    if (role === "EDITOR" && post.authorId !== requestingUserId) {
+      throw new ForbiddenError("You can only modify your own posts");
     }
 
     return prisma.post.update({
@@ -92,6 +95,12 @@ export class PostService {
       include: {
         author: {
           select: { id: true, name: true },
+        },
+        category: true,
+        tags: true,
+        media: {
+          where: { type: MediaType.IMAGE },
+          orderBy: { createdAt: "asc" },
         },
       },
     });
@@ -115,7 +124,6 @@ export class PostService {
             OR: [
               { title: { contains: query, mode: "insensitive" } },
               { content: { contains: query, mode: "insensitive" } },
-              { tags: { has: query.toLowerCase() } },
             ],
           }
         : {}),
@@ -129,6 +137,12 @@ export class PostService {
       orderBy: { createdAt: "desc" },
       include: {
         author: { select: { id: true, name: true } },
+        category: true,
+        media: {
+          where: { type: MediaType.IMAGE },
+          take: 1,
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 

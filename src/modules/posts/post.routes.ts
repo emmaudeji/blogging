@@ -8,7 +8,7 @@ const router = Router();
 /**
  * PUBLIC ROUTES
  */
-router.get("/slug/:slug", (req, res, next) =>
+router.get("/:slug", (req, res, next) =>
   postController.getBySlug(req, res, next)
 );
 

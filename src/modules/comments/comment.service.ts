@@ -32,17 +32,44 @@ class CommentService {
         deletedAt: null,
       },
       take: limit,
-      skip: cursor ? 1 : 0, 
-      cursor: cursor ? { createdAt: new Date(cursor) } : undefined,
+      skip: cursor ? 1 : 0,
+      cursor: cursor ? { id: cursor } : undefined,
       orderBy: { createdAt: "desc" },
     });
 
     return {
       comments,
       nextCursor:
-        comments.length > 0
-          ? comments[comments.length - 1].createdAt.toISOString()
-          : null,
+        comments.length > 0 ? comments[comments.length - 1].id : null,
+    };
+  }
+
+  /**
+   * Admin/editor listing: can see comments in any status for a post.
+   * Optional status filter via query param.
+   */
+  async listForPostModeration(
+    postId: string,
+    limit: number,
+    cursor?: string,
+    status?: CommentStatus
+  ) {
+    const comments = await prisma.comment.findMany({
+      where: {
+        postId,
+        deletedAt: null,
+        ...(status ? { status } : {}),
+      },
+      take: limit,
+      skip: cursor ? 1 : 0,
+      cursor: cursor ? { id: cursor } : undefined,
+      orderBy: { createdAt: "desc" },
+    });
+
+    return {
+      comments,
+      nextCursor:
+        comments.length > 0 ? comments[comments.length - 1].id : null,
     };
   }
 

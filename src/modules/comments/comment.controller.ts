@@ -4,6 +4,7 @@ import {
   createCommentSchema,
   moderateCommentSchema,
 } from "./comment.validation";
+import { CommentStatus } from "@prisma/client";
 
 export class CommentController {
   async create(req: Request, res: Response) {
@@ -32,12 +33,40 @@ export class CommentController {
     res.status(201).json(result);
   }
 
+  // Public: list only APPROVED comments
   async list(req: Request, res: Response) {
     const { postId } = req.params;
     const limit = Number(req.query.limit) || 20;
     const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
 
     const result = await commentService.listForPost(postId, limit, cursor);
+    res.json(result);
+  }
+
+  // Admin/editor: list comments for a post in any status, optional ?status=
+  async listForModeration(req: Request, res: Response) {
+    const { postId } = req.params;
+    const limit = Number(req.query.limit) || 20;
+    const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
+    const statusParam = req.query.status;
+
+    let status: CommentStatus | undefined;
+    if (typeof statusParam === "string") {
+      if (["PENDING", "APPROVED", "REJECTED"].includes(statusParam)) {
+        status = statusParam as CommentStatus;
+      } else {
+        return res.status(400).json({
+          message: "Invalid status. Expected PENDING, APPROVED, or REJECTED.",
+        });
+      }
+    }
+
+    const result = await commentService.listForPostModeration(
+      postId,
+      limit,
+      cursor,
+      status
+    );
     res.json(result);
   }
 

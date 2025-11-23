@@ -6,6 +6,10 @@ export class NotificationController {
     const limit = Number(req.query.limit) || 20;
     const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
 
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const notifications = await notificationService.list(req.user.id, limit, cursor);
     res.json(notifications);
   }

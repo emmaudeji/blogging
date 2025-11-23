@@ -16,7 +16,7 @@ class MediaController {
       filename: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
-      type,
+      type: type as any,
       postId: req.body.postId,
     });
 

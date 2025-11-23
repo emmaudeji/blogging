@@ -1,4 +1,6 @@
 import { prisma } from "../../config/database";
+import { MediaType } from "@prisma/client";
+import { BadRequestError } from "../../utils/errors";
 
 class MediaService {
   async create(data: {
@@ -6,9 +8,19 @@ class MediaService {
     filename: string;
     mimetype: string;
     size: number;
-    type: "IMAGE" | "PDF" | "OTHER";
+    type: MediaType;
     postId?: string;
   }) {
+    if (data.postId) {
+      const post = await prisma.post.findFirst({
+        where: { id: data.postId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!post) {
+        throw new BadRequestError("Invalid postId: post does not exist or is deleted");
+      }
+    }
+
     return prisma.media.create({ data });
   }
 

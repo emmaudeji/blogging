@@ -1,5 +1,5 @@
 // src/modules/users/user.service.ts
-import { Prisma, User } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { prisma } from "../../config/database";
 import {
@@ -15,7 +15,7 @@ async findMany(params: {
     skip?: number;
     take?: number;
     query?: string;
-  }): Promise<{ users: User[]; total: number }> {
+  }): Promise<{ users: any[]; total: number }> {
     const { skip = 0, take = 20, query } = params;
     const where: Prisma.UserWhereInput = query
       ? {
@@ -56,7 +56,7 @@ async findMany(params: {
     cursor?: string;
     limit?: number;
     query?: string;
-  }): Promise<CursorPageResponse<User>> {
+  }): Promise<CursorPageResponse<any>> {
     const { cursor, query } = params;
     const limit = normalizeLimit(params.limit);
 
