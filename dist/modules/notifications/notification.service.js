@@ -53,6 +53,18 @@ class NotificationService {
             nextCursor,
         };
     }
+    async markRead(id, userId) {
+        return database_1.prisma.notification.updateMany({
+            where: { id, userId, readAt: null },
+            data: { readAt: new Date() },
+        });
+    }
+    async markAllRead(userId) {
+        return database_1.prisma.notification.updateMany({
+            where: { userId, readAt: null },
+            data: { readAt: new Date() },
+        });
+    }
 }
 exports.notificationService = new NotificationService();
 // 9. Production Best Practices

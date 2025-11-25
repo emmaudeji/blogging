@@ -13,6 +13,21 @@ class NotificationController {
         const notifications = await notification_service_1.notificationService.list(req.user.id, limit, cursor);
         res.json(notifications);
     }
+    async markRead(req, res) {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const { id } = req.params;
+        await notification_service_1.notificationService.markRead(id, req.user.id);
+        res.status(204).send();
+    }
+    async markAllRead(req, res) {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        await notification_service_1.notificationService.markAllRead(req.user.id);
+        res.status(204).send();
+    }
     /**
      * Server-Sent Events (SSE) stream for real-time notifications.
      * Keeps an open HTTP connection and pushes events as they occur.
