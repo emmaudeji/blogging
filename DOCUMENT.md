@@ -607,3 +607,68 @@ This section ties all pieces together for a typical frontend SPA or Next.js app.
     - Editor requests (review + approve/reject).
 
 With these sections, the API surface is fully mapped to UI responsibilities: anonymous users see content and can comment; readers get accounts, notifications, and can request editor status; editors manage content, taxonomy, media, and moderation; admins oversee users, roles, and system health.
+
+---
+
+## 8. Notifications & Real-time Events
+
+This section summarizes how notifications are stored, delivered, and exposed to the frontend.
+
+### 8.1 Data model & transport
+
+- Notifications are stored per user in the `Notification` table (Prisma model) with fields:
+  - `userId`, `type`, `subject`, `message`, optional `data` (JSON payload), `status` (`PENDING | SENT | FAILED`), and `readAt` (nullable timestamp when the user marked it as read).
+- Delivery mechanisms:
+  - **REST**:
+    - `GET /api/notifications?limit=&cursor=` – cursor-based listing for inbox/history.
+    - `PATCH /api/notifications/:id/read` – mark a single notification as read for the current user.
+    - `POST /api/notifications/read-all` – mark all notifications for the current user as read.
+  - **Real-time (SSE)**: `GET /api/notifications/stream` – Server-Sent Events stream that pushes `notification` events whenever a new notification is created for the logged-in user.
+  - **Email** (optional): each notification enqueues a BullMQ job that sends an email via Nodemailer, then marks the notification `SENT`/`FAILED`.
+
+### 8.2 Notification types (by domain)
+
+Auth / account:
+
+- `ACCOUNT_WELCOME` – sent to the new READER when they register.
+- `ADMIN_NEW_USER_REGISTERED` – sent to all ADMINs when a new user signs up.
+- `ADMIN_USER_LOGIN` – sent to all ADMINs when a user logs in.
+- `ADMIN_PASSWORD_CHANGED` – sent to all ADMINs when a user changes their password.
+
+Editor role lifecycle:
+
+- `EDITOR_REQUEST_SUBMITTED` – sent to all ADMINs when a READER submits an editor request.
+- `EDITOR_REQUEST_APPROVED` – sent to the requesting user when their editor request is approved.
+- `EDITOR_REQUEST_REJECTED` – sent to the requesting user when their editor request is rejected.
+
+Comments:
+
+- `COMMENT_PENDING_MODERATION` – sent to the post author (EDITOR/ADMIN) when a new comment is created and awaits moderation.
+- `COMMENT_APPROVED` – sent to the authenticated comment author when their comment is approved.
+- `COMMENT_REJECTED` – sent to the authenticated comment author when their comment is rejected.
+
+Posts:
+
+- `POST_PUBLISHED` – sent to the post author when their post becomes `PUBLISHED` (on create or update).
+- `POST_UPDATED` – sent to the post author when their published/draft post is updated.
+- `POST_DELETED` – sent to the post author when their post is soft-deleted.
+
+User admin actions:
+
+- `USER_ROLE_CHANGED` – sent to a user when an ADMIN changes their role (e.g., READER → EDITOR).
+- `USER_DELETED` – sent to a user when an ADMIN deletes their account (useful primarily for email delivery).
+
+### 8.3 Frontend integration patterns
+
+For any authenticated user (READER/EDITOR/ADMIN):
+
+- **Inbox/history**: call `GET /api/notifications?limit=20&cursor=...` to build a paginated notifications list.
+- **Real-time updates**: open an SSE connection to `/api/notifications/stream` and listen for `notification` events:
+
+  - Each event payload includes `type`, `subject`, `message`, `data`, `status`, `createdAt`, and `id`.
+  - The frontend can map each `type` to a UI behavior (toast, badge increment, redirect link, etc.).
+
+This notification system is intended as a template for small-to-medium blog backends. In larger deployments you may wish to:
+
+- Throttle or disable some ADMIN-facing events (e.g., `ADMIN_USER_LOGIN`) to avoid noisy inboxes.
+- Add a `readAt` field to `Notification` and endpoints to mark notifications as read for richer inbox UX.

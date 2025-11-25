@@ -1,0 +1,26 @@
+"use strict";
+// src/modules/notifications/notification.types.ts
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NotificationTypes = void 0;
+exports.NotificationTypes = {
+    // Auth / account
+    ACCOUNT_WELCOME: "ACCOUNT_WELCOME",
+    ADMIN_NEW_USER_REGISTERED: "ADMIN_NEW_USER_REGISTERED",
+    ADMIN_USER_LOGIN: "ADMIN_USER_LOGIN",
+    ADMIN_PASSWORD_CHANGED: "ADMIN_PASSWORD_CHANGED",
+    // Editor role lifecycle
+    EDITOR_REQUEST_SUBMITTED: "EDITOR_REQUEST_SUBMITTED",
+    EDITOR_REQUEST_APPROVED: "EDITOR_REQUEST_APPROVED",
+    EDITOR_REQUEST_REJECTED: "EDITOR_REQUEST_REJECTED",
+    // Comments
+    COMMENT_PENDING_MODERATION: "COMMENT_PENDING_MODERATION",
+    COMMENT_APPROVED: "COMMENT_APPROVED",
+    COMMENT_REJECTED: "COMMENT_REJECTED",
+    // Posts
+    POST_PUBLISHED: "POST_PUBLISHED",
+    POST_UPDATED: "POST_UPDATED",
+    POST_DELETED: "POST_DELETED",
+    // Users (admin actions)
+    USER_ROLE_CHANGED: "USER_ROLE_CHANGED",
+    USER_DELETED: "USER_DELETED",
+};

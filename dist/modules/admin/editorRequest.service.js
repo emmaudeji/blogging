@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.editorRequestService = exports.EditorRequestService = void 0;
 // src/modules/admin/editorRequest.service.ts
 const database_1 = require("../../config/database");
+const notification_service_1 = require("../notifications/notification.service");
+const notification_types_1 = require("../notifications/notification.types");
 class EditorRequestService {
     async createRequest(userId, data) {
         // If there is already a pending request, just return it
@@ -11,12 +13,19 @@ class EditorRequestService {
         });
         if (existing)
             return existing;
-        return database_1.prisma.editorRequest.create({
+        const request = await database_1.prisma.editorRequest.create({
             data: {
                 userId,
                 note: data.note,
             },
         });
+        // Notify admins that a new editor request has been submitted
+        const admins = await database_1.prisma.user.findMany({
+            where: { role: "ADMIN" },
+            select: { id: true },
+        });
+        await Promise.all(admins.map((admin) => notification_service_1.notificationService.create(admin.id, notification_types_1.NotificationTypes.EDITOR_REQUEST_SUBMITTED, "New editor request", "A reader has requested editor access.", { requestId: request.id, userId })));
+        return request;
     }
     async listRequests(status) {
         return database_1.prisma.editorRequest.findMany({
@@ -50,6 +59,14 @@ class EditorRequestService {
             }
             return updatedReq;
         });
+        // Notify the requesting user about the decision
+        await notification_service_1.notificationService.create(request.userId, data.status === "APPROVED"
+            ? notification_types_1.NotificationTypes.EDITOR_REQUEST_APPROVED
+            : notification_types_1.NotificationTypes.EDITOR_REQUEST_REJECTED, data.status === "APPROVED"
+            ? "Editor request approved"
+            : "Editor request rejected", data.status === "APPROVED"
+            ? "Your request to become an editor has been approved."
+            : "Your request to become an editor has been rejected.", { requestId: request.id, status: data.status, note: data.note });
         return updated;
     }
 }

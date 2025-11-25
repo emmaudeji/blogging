@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.userService = exports.UserService = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const database_1 = require("../../config/database");
+const notification_service_1 = require("../notifications/notification.service");
+const notification_types_1 = require("../notifications/notification.types");
 const user_validation_1 = require("./user.validation");
 const pagination_1 = require("../../utils/pagination");
 class UserService {
@@ -130,6 +132,12 @@ class UserService {
             where: { id: userId },
             data: { password: hash },
         });
+        // Notify admins that a password was changed (basic audit trail)
+        const admins = await database_1.prisma.user.findMany({
+            where: { role: "ADMIN" },
+            select: { id: true },
+        });
+        await Promise.all(admins.map((admin) => notification_service_1.notificationService.create(admin.id, notification_types_1.NotificationTypes.ADMIN_PASSWORD_CHANGED, "Password changed", `User ${user.email} has changed their password.`, { userId: user.id, email: user.email })));
         return { message: "Password updated" };
     }
     async adminUpdateUser(targetId, payload) {
@@ -153,6 +161,7 @@ class UserService {
                 }
             }
         }
+        const previous = await database_1.prisma.user.findUnique({ where: { id: targetId } });
         const user = await database_1.prisma.user.update({
             where: { id: targetId },
             data,
@@ -167,6 +176,10 @@ class UserService {
                 updatedAt: true,
             },
         });
+        // Notify the user if their role changed
+        if (previous && data.role && data.role !== previous.role) {
+            await notification_service_1.notificationService.create(user.id, notification_types_1.NotificationTypes.USER_ROLE_CHANGED, "Account role updated", `Your role has been changed from ${previous.role} to ${data.role}.`, { previousRole: previous.role, newRole: data.role });
+        }
         return user;
     }
     async deleteUser(targetId) {
@@ -179,7 +192,11 @@ class UserService {
             }
         }
         // consider soft-delete in production; hard delete shown here
+        const user = await database_1.prisma.user.findUnique({ where: { id: targetId } });
         await database_1.prisma.user.delete({ where: { id: targetId } });
+        if (user) {
+            await notification_service_1.notificationService.create(user.id, notification_types_1.NotificationTypes.USER_DELETED, "Account deleted", "Your account has been deleted by an administrator.", {});
+        }
         return { message: "User deleted" };
     }
 }

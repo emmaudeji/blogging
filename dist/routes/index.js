@@ -11,7 +11,7 @@ const post_routes_1 = __importDefault(require("../modules/posts/post.routes"));
 const comment_routes_1 = require("../modules/comments/comment.routes");
 const taxonomy_routes_1 = __importDefault(require("../modules/taxonomy/taxonomy.routes"));
 const media_routes_1 = __importDefault(require("../modules/media/media.routes"));
-// import notificationRoutes from "../modules/notifications/notification.routes";
+const notification_routes_1 = __importDefault(require("../modules/notifications/notification.routes"));
 const admin_routes_1 = __importDefault(require("../modules/admin/admin.routes"));
 const editor_controller_1 = require("../modules/admin/editor.controller");
 const authGuard_1 = require("../middleware/authGuard");
@@ -22,7 +22,7 @@ router.use("/posts", post_routes_1.default);
 router.use("/comments", comment_routes_1.commentRouter);
 router.use("/taxonomy", taxonomy_routes_1.default);
 router.use("/media", media_routes_1.default);
-// router.use("/notifications", notificationRoutes);
+router.use("/notifications", notification_routes_1.default);
 router.use("/admin", admin_routes_1.default);
 // Reader: create editor role request
 router.post("/editor-requests", authGuard_1.authGuard, (req, res, next) => editor_controller_1.editorController.createEditorRequest(req, res, next));

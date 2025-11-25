@@ -3,11 +3,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.notificationService = void 0;
 const database_1 = require("../../config/database");
 const queue_1 = require("../../utils/queue");
+const realtime_1 = require("../../utils/realtime");
 class NotificationService {
     async create(userId, type, subject, message, data) {
         const notification = await database_1.prisma.notification.create({
             data: { userId, type, subject, message, data },
         });
+        // Push real-time event to any connected clients for this user
+        realtime_1.realtime.pushNotification(notification);
         // enqueue async email
         const user = await database_1.prisma.user.findUnique({ where: { id: userId } });
         if (user?.email) {
@@ -35,12 +38,20 @@ class NotificationService {
     async list(userId, limit = 20, cursor) {
         const notifications = await database_1.prisma.notification.findMany({
             where: { userId },
-            take: limit,
+            take: limit + 1,
             skip: cursor ? 1 : 0,
             cursor: cursor ? { id: cursor } : undefined,
             orderBy: { createdAt: "desc" },
         });
-        return notifications;
+        let nextCursor = null;
+        if (notifications.length > limit) {
+            const next = notifications.pop();
+            nextCursor = next ? next.id : null;
+        }
+        return {
+            data: notifications,
+            nextCursor,
+        };
     }
 }
 exports.notificationService = new NotificationService();

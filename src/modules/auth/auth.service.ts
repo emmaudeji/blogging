@@ -3,6 +3,8 @@ import bcrypt from "bcrypt";
 import { prisma } from "../../config/database";
 import { RegisterInput, LoginInput } from "./auth.validation";
 import { ConflictError, UnauthorizedError } from "../../utils/errors";
+import { notificationService } from "../notifications/notification.service";
+import { NotificationTypes } from "../notifications/notification.types";
 
 export class AuthService {
   async register(data: RegisterInput) {
@@ -25,6 +27,32 @@ export class AuthService {
       },
     });
 
+    // Send a welcome notification to the new account
+    await notificationService.create(
+      user.id,
+      NotificationTypes.ACCOUNT_WELCOME,
+      "Welcome to the blog",
+      "Your account has been created successfully.",
+      {}
+    );
+
+    // Notify all admins about new signup (small/blog-scale default; can be disabled later)
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((admin) =>
+        notificationService.create(
+          admin.id,
+          NotificationTypes.ADMIN_NEW_USER_REGISTERED,
+          "New user registered",
+          `A new user has signed up with email ${user.email}.`,
+          { userId: user.id, email: user.email }
+        )
+      )
+    );
+
     return user;
   }
 
@@ -37,6 +65,23 @@ export class AuthService {
 
     const match = await bcrypt.compare(data.password, user.password);
     if (!match) throw new UnauthorizedError("Invalid email or password");
+
+    // Notify admins about a successful login (can be throttled or disabled in larger deployments)
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((admin) =>
+        notificationService.create(
+          admin.id,
+          NotificationTypes.ADMIN_USER_LOGIN,
+          "User login",
+          `User ${user.email} has logged in.`,
+          { userId: user.id, email: user.email }
+        )
+      )
+    );
 
     return user;
   }

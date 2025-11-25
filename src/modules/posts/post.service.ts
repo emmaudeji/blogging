@@ -1,6 +1,8 @@
 import { prisma } from "../../config/database";
 import { createPostSchema, updatePostSchema } from "./post.validation";
 import { slugify } from "../../utils/slugify";
+import { notificationService } from "../notifications/notification.service";
+import { NotificationTypes } from "../notifications/notification.types";
 import {
   CursorPaginationParams,
   CursorPageResponse,
@@ -28,7 +30,7 @@ export class PostService {
 
     const slug = await this.generateUniqueSlug(data.title);
 
-    return await prisma.post.create({
+    const post = await prisma.post.create({
       data: {
         ...data,
         slug,
@@ -36,6 +38,19 @@ export class PostService {
         publishedAt: data.status === "PUBLISHED" ? new Date() : null,
       },
     });
+
+    // If created as PUBLISHED, notify the author
+    if (post.status === "PUBLISHED") {
+      await notificationService.create(
+        authorId,
+        NotificationTypes.POST_PUBLISHED,
+        "Post published",
+        "Your post has been published.",
+        { postId: post.id, slug: post.slug }
+      );
+    }
+
+    return post;
   }
 
   async update(id: string, payload: unknown, requestingUserId: string, role: string) {
@@ -58,7 +73,7 @@ export class PostService {
       updateData.slug = await this.generateUniqueSlug(data.title);
     }
 
-    return prisma.post.update({
+    const updated = await prisma.post.update({
       where: { id },
       data: {
         ...updateData,
@@ -66,6 +81,29 @@ export class PostService {
           updateData.status === "PUBLISHED" ? new Date() : post.publishedAt,
       },
     });
+
+    // Notify the author if the post was published or updated by someone else
+    if (updated.authorId) {
+      if (post.status !== "PUBLISHED" && updated.status === "PUBLISHED") {
+        await notificationService.create(
+          updated.authorId,
+          NotificationTypes.POST_PUBLISHED,
+          "Post published",
+          "Your post has been published.",
+          { postId: updated.id, slug: updated.slug }
+        );
+      } else {
+        await notificationService.create(
+          updated.authorId,
+          NotificationTypes.POST_UPDATED,
+          "Post updated",
+          "Your post has been updated.",
+          { postId: updated.id, slug: updated.slug }
+        );
+      }
+    }
+
+    return updated;
   }
 
   async softDelete(id: string, requestingUserId: string, role: string) {
@@ -78,10 +116,22 @@ export class PostService {
       throw new ForbiddenError("You can only modify your own posts");
     }
 
-    return prisma.post.update({
+    const updated = await prisma.post.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
+
+    if (post.authorId) {
+      await notificationService.create(
+        post.authorId,
+        NotificationTypes.POST_DELETED,
+        "Post deleted",
+        "Your post has been deleted.",
+        { postId: updated.id }
+      );
+    }
+
+    return updated;
   }
 
   /** PUBLIC: Get post by slug */

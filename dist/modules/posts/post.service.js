@@ -4,6 +4,8 @@ exports.postService = exports.PostService = void 0;
 const database_1 = require("../../config/database");
 const post_validation_1 = require("./post.validation");
 const slugify_1 = require("../../utils/slugify");
+const notification_service_1 = require("../notifications/notification.service");
+const notification_types_1 = require("../notifications/notification.types");
 const pagination_1 = require("../../utils/pagination");
 const client_1 = require("@prisma/client");
 const errors_1 = require("../../utils/errors");
@@ -23,7 +25,7 @@ class PostService {
     async create(authorId, payload) {
         const data = post_validation_1.createPostSchema.parse(payload);
         const slug = await this.generateUniqueSlug(data.title);
-        return await database_1.prisma.post.create({
+        const post = await database_1.prisma.post.create({
             data: {
                 ...data,
                 slug,
@@ -31,6 +33,11 @@ class PostService {
                 publishedAt: data.status === "PUBLISHED" ? new Date() : null,
             },
         });
+        // If created as PUBLISHED, notify the author
+        if (post.status === "PUBLISHED") {
+            await notification_service_1.notificationService.create(authorId, notification_types_1.NotificationTypes.POST_PUBLISHED, "Post published", "Your post has been published.", { postId: post.id, slug: post.slug });
+        }
+        return post;
     }
     async update(id, payload, requestingUserId, role) {
         const post = await database_1.prisma.post.findFirst({
@@ -48,13 +55,23 @@ class PostService {
         if (data.title) {
             updateData.slug = await this.generateUniqueSlug(data.title);
         }
-        return database_1.prisma.post.update({
+        const updated = await database_1.prisma.post.update({
             where: { id },
             data: {
                 ...updateData,
                 publishedAt: updateData.status === "PUBLISHED" ? new Date() : post.publishedAt,
             },
         });
+        // Notify the author if the post was published or updated by someone else
+        if (updated.authorId) {
+            if (post.status !== "PUBLISHED" && updated.status === "PUBLISHED") {
+                await notification_service_1.notificationService.create(updated.authorId, notification_types_1.NotificationTypes.POST_PUBLISHED, "Post published", "Your post has been published.", { postId: updated.id, slug: updated.slug });
+            }
+            else {
+                await notification_service_1.notificationService.create(updated.authorId, notification_types_1.NotificationTypes.POST_UPDATED, "Post updated", "Your post has been updated.", { postId: updated.id, slug: updated.slug });
+            }
+        }
+        return updated;
     }
     async softDelete(id, requestingUserId, role) {
         const post = await database_1.prisma.post.findFirst({
@@ -65,10 +82,14 @@ class PostService {
         if (role === "EDITOR" && post.authorId !== requestingUserId) {
             throw new errors_1.ForbiddenError("You can only modify your own posts");
         }
-        return database_1.prisma.post.update({
+        const updated = await database_1.prisma.post.update({
             where: { id },
             data: { deletedAt: new Date() },
         });
+        if (post.authorId) {
+            await notification_service_1.notificationService.create(post.authorId, notification_types_1.NotificationTypes.POST_DELETED, "Post deleted", "Your post has been deleted.", { postId: updated.id });
+        }
+        return updated;
     }
     /** PUBLIC: Get post by slug */
     async getBySlug(slug) {

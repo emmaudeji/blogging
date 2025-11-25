@@ -4,6 +4,8 @@ import {
   CreateEditorRequestInput,
   DecideEditorRequestInput,
 } from "./editor.validation";
+import { notificationService } from "../notifications/notification.service";
+import { NotificationTypes } from "../notifications/notification.types";
 
 export class EditorRequestService {
   async createRequest(userId: string, data: CreateEditorRequestInput) {
@@ -14,12 +16,31 @@ export class EditorRequestService {
 
     if (existing) return existing;
 
-    return prisma.editorRequest.create({
+    const request = await prisma.editorRequest.create({
       data: {
         userId,
         note: data.note,
       },
     });
+
+    // Notify admins that a new editor request has been submitted
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((admin) =>
+        notificationService.create(
+          admin.id,
+          NotificationTypes.EDITOR_REQUEST_SUBMITTED,
+          "New editor request",
+          "A reader has requested editor access.",
+          { requestId: request.id, userId }
+        )
+      )
+    );
+
+    return request;
   }
 
   async listRequests(status?: "PENDING" | "APPROVED" | "REJECTED") {
@@ -63,6 +84,21 @@ export class EditorRequestService {
 
       return updatedReq;
     });
+
+    // Notify the requesting user about the decision
+    await notificationService.create(
+      request.userId,
+      data.status === "APPROVED"
+        ? NotificationTypes.EDITOR_REQUEST_APPROVED
+        : NotificationTypes.EDITOR_REQUEST_REJECTED,
+      data.status === "APPROVED"
+        ? "Editor request approved"
+        : "Editor request rejected",
+      data.status === "APPROVED"
+        ? "Your request to become an editor has been approved."
+        : "Your request to become an editor has been rejected.",
+      { requestId: request.id, status: data.status, note: data.note }
+    );
 
     return updated;
   }

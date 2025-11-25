@@ -2,6 +2,8 @@
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { prisma } from "../../config/database";
+import { notificationService } from "../notifications/notification.service";
+import { NotificationTypes } from "../notifications/notification.types";
 import {
   adminUpdateUserSchema,
   changePasswordSchema,
@@ -153,6 +155,23 @@ async findMany(params: {
       data: { password: hash },
     });
 
+    // Notify admins that a password was changed (basic audit trail)
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((admin) =>
+        notificationService.create(
+          admin.id,
+          NotificationTypes.ADMIN_PASSWORD_CHANGED,
+          "Password changed",
+          `User ${user.email} has changed their password.`,
+          { userId: user.id, email: user.email }
+        )
+      )
+    );
+
     return { message: "Password updated" };
   }
 
@@ -180,6 +199,8 @@ async findMany(params: {
       }
     }
 
+    const previous = await prisma.user.findUnique({ where: { id: targetId } });
+
     const user = await prisma.user.update({
       where: { id: targetId },
       data,
@@ -195,6 +216,17 @@ async findMany(params: {
       },
     });
 
+    // Notify the user if their role changed
+    if (previous && data.role && data.role !== previous.role) {
+      await notificationService.create(
+        user.id,
+        NotificationTypes.USER_ROLE_CHANGED,
+        "Account role updated",
+        `Your role has been changed from ${previous.role} to ${data.role}.`,
+        { previousRole: previous.role, newRole: data.role }
+      );
+    }
+
     return user;
   }
 
@@ -209,7 +241,20 @@ async findMany(params: {
     }
 
     // consider soft-delete in production; hard delete shown here
+    const user = await prisma.user.findUnique({ where: { id: targetId } });
+
     await prisma.user.delete({ where: { id: targetId } });
+
+    if (user) {
+      await notificationService.create(
+        user.id,
+        NotificationTypes.USER_DELETED,
+        "Account deleted",
+        "Your account has been deleted by an administrator.",
+        {}
+      );
+    }
+
     return { message: "User deleted" };
   }
 }

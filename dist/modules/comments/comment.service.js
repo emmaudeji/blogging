@@ -3,9 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.commentService = void 0;
 const client_1 = require("@prisma/client");
 const database_1 = require("../../config/database");
+const notification_service_1 = require("../notifications/notification.service");
+const notification_types_1 = require("../notifications/notification.types");
 class CommentService {
     async create(data) {
-        return database_1.prisma.comment.create({
+        const comment = await database_1.prisma.comment.create({
             data: {
                 postId: data.postId,
                 parentId: data.parentId ?? null,
@@ -16,6 +18,15 @@ class CommentService {
                 status: client_1.CommentStatus.PENDING,
             },
         });
+        // Notify the post author that a new comment is pending moderation
+        const post = await database_1.prisma.post.findUnique({
+            where: { id: data.postId },
+            select: { id: true, authorId: true },
+        });
+        if (post?.authorId) {
+            await notification_service_1.notificationService.create(post.authorId, notification_types_1.NotificationTypes.COMMENT_PENDING_MODERATION, "New comment awaiting moderation", "A new comment has been submitted on your post.", { postId: post.id, commentId: comment.id });
+        }
+        return comment;
     }
     async listForPost(postId, limit, cursor) {
         const comments = await database_1.prisma.comment.findMany({
@@ -56,10 +67,24 @@ class CommentService {
         };
     }
     async moderate(id, status) {
-        return database_1.prisma.comment.update({
+        const comment = await database_1.prisma.comment.update({
             where: { id },
             data: { status },
         });
+        // Notify the comment author if this was an authenticated user
+        if (comment.authorId) {
+            const type = status === client_1.CommentStatus.APPROVED
+                ? notification_types_1.NotificationTypes.COMMENT_APPROVED
+                : notification_types_1.NotificationTypes.COMMENT_REJECTED;
+            const subject = status === client_1.CommentStatus.APPROVED
+                ? "Your comment was approved"
+                : "Your comment was rejected";
+            const message = status === client_1.CommentStatus.APPROVED
+                ? "Your comment has been approved and is now visible."
+                : "Your comment has been rejected by a moderator.";
+            await notification_service_1.notificationService.create(comment.authorId, type, subject, message, { commentId: comment.id, postId: comment.postId, status });
+        }
+        return comment;
     }
     async softDelete(id) {
         return database_1.prisma.comment.update({
