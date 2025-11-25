@@ -26,11 +26,32 @@ class CommentController {
         });
         res.status(201).json(result);
     }
+    // Public: list only APPROVED comments
     async list(req, res) {
         const { postId } = req.params;
         const limit = Number(req.query.limit) || 20;
         const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
         const result = await comment_service_1.commentService.listForPost(postId, limit, cursor);
+        res.json(result);
+    }
+    // Admin/editor: list comments for a post in any status, optional ?status=
+    async listForModeration(req, res) {
+        const { postId } = req.params;
+        const limit = Number(req.query.limit) || 20;
+        const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
+        const statusParam = req.query.status;
+        let status;
+        if (typeof statusParam === "string") {
+            if (["PENDING", "APPROVED", "REJECTED"].includes(statusParam)) {
+                status = statusParam;
+            }
+            else {
+                return res.status(400).json({
+                    message: "Invalid status. Expected PENDING, APPROVED, or REJECTED.",
+                });
+            }
+        }
+        const result = await comment_service_1.commentService.listForPostModeration(postId, limit, cursor, status);
         res.json(result);
     }
     async moderate(req, res) {

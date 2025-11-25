@@ -1,4 +1,4 @@
-npx prisma migrate dev --name init
+npx prisma migrate dev --name new-model
 npx prisma generate
 npx prisma studio   # optional, to inspect your DB visually
 npx prisma format  # run to clean up schema before generating

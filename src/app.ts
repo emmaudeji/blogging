@@ -6,12 +6,18 @@ import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import session from "express-session";
 import morgan from "morgan";
-import fs from "fs";
+import mongoSanitize from "express-mongo-sanitize";
+// These modules ship without TypeScript types; import as any-typed functions
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const xss = require("xss-clean") as unknown as () => express.RequestHandler;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const hpp = require("hpp") as unknown as () => express.RequestHandler;
 import path from "path";
 import type { Request, Response, NextFunction } from "express";
 
 import { sessionOptions } from "./config/sessionStore";
 import { env } from "./config/env";
+import { prisma } from "./config/database";
 import { errorHandler } from "./middleware/errorHandler";
 
 // Routes
@@ -24,8 +30,16 @@ app.set("trust proxy", 1);
 
 // Security middlewares
 app.use(helmet());
-app.use(cors({ origin: true, credentials: true }));
+app.use(
+  cors({
+    origin: env.FRONTEND_URL,
+    credentials: true,
+  })
+);
 app.use(cookieParser());
+app.use(mongoSanitize());
+app.use(xss());
+app.use(hpp());
 
 // Body parsing
 app.use(express.json({ limit: "10kb" }));
@@ -67,6 +81,11 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     return res.status(400).json({ message: "Invalid JSON in request body" });
   }
   next(err);
+});
+
+// 404 handler for unmatched routes
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ message: "Not found" });
 });
 
 // Global error handler (must be last)

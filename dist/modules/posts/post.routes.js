@@ -8,7 +8,7 @@ const router = (0, express_1.Router)();
 /**
  * PUBLIC ROUTES
  */
-router.get("/slug/:slug", (req, res, next) => post_controller_1.postController.getBySlug(req, res, next));
+router.get("/:slug", (req, res, next) => post_controller_1.postController.getBySlug(req, res, next));
 router.get("/", (req, res, next) => post_controller_1.postController.list(req, res, next));
 /**
  * AUTH + EDITOR/ADMIN ROUTES

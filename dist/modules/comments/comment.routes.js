@@ -8,7 +8,9 @@ const authGuard_1 = require("../../middleware/authGuard");
 exports.commentRouter = (0, express_1.Router)();
 // Public: anyone can create comments (guest or authenticated)
 exports.commentRouter.post("/", comment_controller_1.commentController.create);
-// Fetch comments for a post
+// Admin/editor: list comments for a post (any status, optional ?status=)
+exports.commentRouter.get("/admin/:postId", authGuard_1.authGuard, (0, roleGuard_1.roleGuard)(["ADMIN", "EDITOR"]), comment_controller_1.commentController.listForModeration);
+// Public: fetch approved comments for a post
 exports.commentRouter.get("/:postId", comment_controller_1.commentController.list);
 // Moderation (admin + editor)
 exports.commentRouter.patch("/:id/moderate", authGuard_1.authGuard, (0, roleGuard_1.roleGuard)(["ADMIN", "EDITOR"]), comment_controller_1.commentController.moderate);

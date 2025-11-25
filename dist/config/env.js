@@ -10,6 +10,9 @@ const envSchema = zod_1.z.object({
     DATABASE_URL: zod_1.z.string().url(),
     FRONTEND_URL: zod_1.z.string().url(),
     SESSION_SECRET: zod_1.z.string().min(32),
+    // redis / queues
+    REDIS_URL: zod_1.z.string().url().optional(),
+    ENABLE_QUEUES: zod_1.z.enum(["true", "false"]).optional(),
     // cloudinary
     CLOUDINARY_CLOUD_NAME: zod_1.z.string(),
     CLOUDINARY_API_KEY: zod_1.z.string(),

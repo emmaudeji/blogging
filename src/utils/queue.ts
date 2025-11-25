@@ -2,16 +2,18 @@ import { Queue, Worker, Job } from "bullmq";
 import IORedis from "ioredis";
 import { transporter } from "./email";
 import { notificationService } from "../modules/notifications/notification.service";
+import { env } from "../config/env";
+import { logger } from "../config/logger";
 
 // Queues are optional in development; enable with ENABLE_QUEUES=true and a valid REDIS_URL
-const enableQueues = process.env.ENABLE_QUEUES === "true" && !!process.env.REDIS_URL;
+const enableQueues = env.ENABLE_QUEUES === "true" && !!env.REDIS_URL;
 
 let notificationQueue: Queue;
 let notificationWorker: Worker | null = null;
 
 if (enableQueues) {
   // BullMQ requires maxRetriesPerRequest = null with ioredis v5+
-  const connection = new IORedis(process.env.REDIS_URL!, {
+  const connection = new IORedis(env.REDIS_URL!, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
   });
@@ -26,7 +28,7 @@ if (enableQueues) {
 
       try {
         await transporter.sendMail({
-          from: `"Blog App" <${process.env.SMTP_FROM}>`,
+          from: env.SMTP_FROM,
           to: userEmail,
           subject,
           html: `<p>${message}</p>`,
@@ -35,7 +37,7 @@ if (enableQueues) {
         await notificationService.markSent(notificationId);
       } catch (error) {
         await notificationService.markFailed(notificationId);
-        console.error("Notification failed:", error);
+        logger.error("Notification failed", { error });
       }
     },
     { connection }
@@ -44,9 +46,9 @@ if (enableQueues) {
   // No-op queue used when Redis/queues are disabled, so server can start without Redis
   notificationQueue = {
     async add(name: string, data: any) {
-      if (process.env.NODE_ENV === "development") {
+      if (env.NODE_ENV === "development") {
         // Intentionally minimal logging to avoid noise in production templates
-        console.log(`[queue disabled] Skipping job`, name);
+        logger.debug(`[queue disabled] Skipping job`, { name });
       }
     },
   } as unknown as Queue;

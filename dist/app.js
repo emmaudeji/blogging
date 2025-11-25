@@ -12,6 +12,12 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const express_session_1 = __importDefault(require("express-session"));
 const morgan_1 = __importDefault(require("morgan"));
+const express_mongo_sanitize_1 = __importDefault(require("express-mongo-sanitize"));
+// These modules ship without TypeScript types; import as any-typed functions
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const xss = require("xss-clean");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const hpp = require("hpp");
 const path_1 = __importDefault(require("path"));
 const sessionStore_1 = require("./config/sessionStore");
 const env_1 = require("./config/env");
@@ -23,8 +29,14 @@ exports.app = (0, express_1.default)();
 exports.app.set("trust proxy", 1);
 // Security middlewares
 exports.app.use((0, helmet_1.default)());
-exports.app.use((0, cors_1.default)({ origin: true, credentials: true }));
+exports.app.use((0, cors_1.default)({
+    origin: env_1.env.FRONTEND_URL,
+    credentials: true,
+}));
 exports.app.use((0, cookie_parser_1.default)());
+exports.app.use((0, express_mongo_sanitize_1.default)());
+exports.app.use(xss());
+exports.app.use(hpp());
 // Body parsing
 exports.app.use(express_1.default.json({ limit: "10kb" }));
 exports.app.use(express_1.default.urlencoded({ extended: true }));
@@ -59,6 +71,10 @@ exports.app.use((err, req, res, next) => {
         return res.status(400).json({ message: "Invalid JSON in request body" });
     }
     next(err);
+});
+// 404 handler for unmatched routes
+exports.app.use((req, res) => {
+    res.status(404).json({ message: "Not found" });
 });
 // Global error handler (must be last)
 exports.app.use(errorHandler_1.errorHandler);
